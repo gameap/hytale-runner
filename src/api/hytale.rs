@@ -68,8 +68,17 @@ pub struct HytaleClient {
 
 impl HytaleClient {
     pub fn new(config: &AppConfig) -> Result<Self> {
+        let client = Client::builder()
+            .user_agent(format!(
+                "{}/{}",
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION")
+            ))
+            .build()
+            .context("Failed to create HTTP client")?;
+
         Ok(Self {
-            client: Client::new(),
+            client,
             config: config.clone(),
         })
     }
