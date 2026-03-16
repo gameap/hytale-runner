@@ -4,6 +4,9 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use tracing::{debug, info};
 
+use crate::config::AppConfig;
+use crate::server::downloader::ServerDownloader;
+
 /// Information about an available update
 pub struct UpdateInfo {
     pub current_version: String,
@@ -15,16 +18,22 @@ pub struct ServerStatus {
     pub is_installed: bool,
     pub current_version: Option<String>,
     pub has_staged_update: bool,
+    pub has_remote_update: bool,
 }
 
 /// Handles server updates
 pub struct ServerUpdater {
     server_dir: PathBuf,
+    downloader: Option<ServerDownloader>,
 }
 
 impl ServerUpdater {
-    pub fn new(server_dir: PathBuf) -> Self {
-        Self { server_dir }
+    pub fn new(server_dir: PathBuf, config: &AppConfig) -> Self {
+        let downloader = ServerDownloader::new(config).ok();
+        Self {
+            server_dir,
+            downloader,
+        }
     }
 
     /// Check if there's a staged update waiting to be applied
@@ -93,8 +102,7 @@ impl ServerUpdater {
 
     /// Check for available updates
     pub async fn check_for_updates(&self) -> Result<Option<UpdateInfo>> {
-        // TODO: Implement actual update checking via Hytale API
-        // For now, just check if there's a staged update
+        // Check if there's a staged update
         if self.has_staged_update() {
             return Ok(Some(UpdateInfo {
                 current_version: self
@@ -104,17 +112,39 @@ impl ServerUpdater {
             }));
         }
 
+        // Check for remote updates via hytale-downloader
+        if let Some(ref downloader) = self.downloader {
+            if downloader.check_updates(&self.server_dir).await? {
+                return Ok(Some(UpdateInfo {
+                    current_version: self
+                        .get_current_version()?
+                        .unwrap_or_else(|| "unknown".to_string()),
+                    new_version: "available".to_string(),
+                }));
+            }
+        }
+
         Ok(None)
     }
 
     /// Get the current server status
-    pub fn get_status(&self) -> Result<ServerStatus> {
+    pub async fn get_status(&self) -> Result<ServerStatus> {
         let jar_path = self.server_dir.join("HytaleServer.jar");
+
+        let has_remote_update = if let Some(ref downloader) = self.downloader {
+            downloader
+                .check_updates(&self.server_dir)
+                .await
+                .unwrap_or(false)
+        } else {
+            false
+        };
 
         Ok(ServerStatus {
             is_installed: jar_path.exists(),
             current_version: self.get_current_version()?,
             has_staged_update: self.has_staged_update(),
+            has_remote_update,
         })
     }
 

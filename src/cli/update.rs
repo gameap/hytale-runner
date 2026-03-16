@@ -2,6 +2,7 @@ use anyhow::Result;
 use tracing::info;
 
 use crate::cli::{Cli, UpdateArgs, UpdateCommands};
+use crate::config::AppConfig;
 use crate::server::updater::ServerUpdater;
 
 /// Execute the update command
@@ -11,12 +12,13 @@ pub async fn execute(args: &UpdateArgs, cli: &Cli) -> Result<()> {
         .clone()
         .unwrap_or_else(|| std::env::current_dir().unwrap());
 
-    let updater = ServerUpdater::new(server_dir);
+    let config = AppConfig::load(cli.config.as_ref(), &server_dir)?;
+    let updater = ServerUpdater::new(server_dir, &config);
 
     match &args.command {
         Some(UpdateCommands::Check) => check_updates(&updater).await,
         Some(UpdateCommands::Apply) => apply_update(&updater),
-        Some(UpdateCommands::Status) | None => show_status(&updater),
+        Some(UpdateCommands::Status) | None => show_status(&updater).await,
     }
 }
 
@@ -55,8 +57,8 @@ fn apply_update(updater: &ServerUpdater) -> Result<()> {
 }
 
 /// Show current version and update status
-fn show_status(updater: &ServerUpdater) -> Result<()> {
-    let status = updater.get_status()?;
+async fn show_status(updater: &ServerUpdater) -> Result<()> {
+    let status = updater.get_status().await?;
 
     println!("Server Status");
     println!("=============");
@@ -79,9 +81,21 @@ fn show_status(updater: &ServerUpdater) -> Result<()> {
         }
     );
 
+    println!(
+        "Remote update available: {}",
+        if status.has_remote_update {
+            "yes"
+        } else {
+            "no"
+        }
+    );
+
     if status.has_staged_update {
         println!();
         println!("Run 'hytale-runner update apply' to apply the staged update.");
+    } else if status.has_remote_update {
+        println!();
+        println!("Run 'hytale-runner download --force' to download the update.");
     }
 
     Ok(())

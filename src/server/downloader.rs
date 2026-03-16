@@ -1,91 +1,153 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 
 use anyhow::{Context, Result};
-use tracing::info;
+use tokio::process::Command;
+use tracing::{debug, info};
 
-use crate::api::hytale::HytaleClient;
 use crate::config::AppConfig;
-use crate::utils::http::HttpClient;
 
-/// Downloads Hytale server files via OAuth2 device flow
+const HYTALE_DOWNLOADER_BIN: &str = "hytale-downloader";
+
+/// Downloads Hytale server files using hytale-downloader
 pub struct ServerDownloader {
-    hytale_client: HytaleClient,
-    http_client: HttpClient,
+    downloader_path: PathBuf,
 }
 
 impl ServerDownloader {
     pub fn new(config: &AppConfig) -> Result<Self> {
-        let hytale_client = HytaleClient::new(config)?;
+        let downloader_path = find_hytale_downloader(config)?;
 
-        Ok(Self {
-            hytale_client,
-            http_client: HttpClient::new(),
-        })
+        Ok(Self { downloader_path })
     }
 
-    /// Download all server files
+    /// Download all server files using hytale-downloader
     pub async fn download_all(&self, server_dir: &Path, force: bool) -> Result<()> {
         std::fs::create_dir_all(server_dir).context("Failed to create server directory")?;
 
-        let jar_path = server_dir.join("HytaleServer.jar");
-        let assets_path = server_dir.join("Assets.zip");
+        info!("Running hytale-downloader to check and download server files...");
 
-        // Download HytaleServer.jar
-        if force || !jar_path.exists() {
-            self.download_server_jar(&jar_path).await?;
-        } else {
-            info!("HytaleServer.jar already exists, skipping (use --force to re-download)");
+        let mut cmd = Command::new(&self.downloader_path);
+        cmd.arg("--output")
+            .arg(server_dir)
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit());
+
+        if force {
+            cmd.arg("--force");
         }
 
-        // Download Assets.zip
-        if force || !assets_path.exists() {
-            self.download_assets(&assets_path).await?;
-        } else {
-            info!("Assets.zip already exists, skipping (use --force to re-download)");
+        debug!("Executing: {:?}", cmd);
+
+        let status = cmd
+            .status()
+            .await
+            .context("Failed to execute hytale-downloader")?;
+
+        if !status.success() {
+            let code = status.code().unwrap_or(-1);
+            anyhow::bail!("hytale-downloader exited with code {}", code);
         }
 
+        info!("Server files downloaded successfully");
         Ok(())
     }
 
-    /// Download the server JAR file
-    async fn download_server_jar(&self, dest: &Path) -> Result<()> {
-        info!("Authenticating with Hytale...");
+    /// Check if server files need updating using hytale-downloader
+    pub async fn check_updates(&self, server_dir: &Path) -> Result<bool> {
+        info!("Checking for server updates...");
 
-        // Get download URL (will trigger OAuth2 flow if needed)
-        let download_info = self
-            .hytale_client
-            .get_server_download_url()
+        let output = Command::new(&self.downloader_path)
+            .arg("--output")
+            .arg(server_dir)
+            .arg("--check")
+            .output()
             .await
-            .context("Failed to get server download URL")?;
+            .context("Failed to execute hytale-downloader for update check")?;
 
-        info!("Downloading HytaleServer.jar...");
-        self.http_client
-            .download_file(&download_info.server_url, dest, None)
-            .await
-            .context("Failed to download HytaleServer.jar")?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            debug!("hytale-downloader check failed: {}", stderr);
+            return Ok(false);
+        }
 
-        info!("HytaleServer.jar downloaded successfully");
-        Ok(())
+        // Parse output to determine if updates are available
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let has_updates = stdout.contains("update available")
+            || stdout.contains("needs update")
+            || stdout.contains("outdated");
+
+        Ok(has_updates)
+    }
+}
+
+/// Find hytale-downloader binary
+fn find_hytale_downloader(config: &AppConfig) -> Result<PathBuf> {
+    // 1. Check if configured path exists
+    if let Some(ref path) = config.downloader_path {
+        let path = PathBuf::from(path);
+        if path.exists() {
+            debug!("Using configured hytale-downloader: {:?}", path);
+            return Ok(path);
+        }
     }
 
-    /// Download the assets file
-    async fn download_assets(&self, dest: &Path) -> Result<()> {
-        info!("Authenticating with Hytale...");
+    // 2. Check in same directory as hytale-runner executable
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let downloader_path = exe_dir.join(HYTALE_DOWNLOADER_BIN);
+            if downloader_path.exists() {
+                debug!(
+                    "Found hytale-downloader next to executable: {:?}",
+                    downloader_path
+                );
+                return Ok(downloader_path);
+            }
 
-        // Get download URL (will trigger OAuth2 flow if needed)
-        let download_info = self
-            .hytale_client
-            .get_server_download_url()
-            .await
-            .context("Failed to get assets download URL")?;
-
-        info!("Downloading Assets.zip...");
-        self.http_client
-            .download_file(&download_info.assets_url, dest, None)
-            .await
-            .context("Failed to download Assets.zip")?;
-
-        info!("Assets.zip downloaded successfully");
-        Ok(())
+            // Also check with .exe extension on Windows
+            #[cfg(windows)]
+            {
+                let downloader_path = exe_dir.join(format!("{}.exe", HYTALE_DOWNLOADER_BIN));
+                if downloader_path.exists() {
+                    debug!(
+                        "Found hytale-downloader.exe next to executable: {:?}",
+                        downloader_path
+                    );
+                    return Ok(downloader_path);
+                }
+            }
+        }
     }
+
+    // 3. Check in PATH
+    if let Ok(path) = which::which(HYTALE_DOWNLOADER_BIN) {
+        debug!("Found hytale-downloader in PATH: {:?}", path);
+        return Ok(path);
+    }
+
+    // 4. Check in current directory
+    let current_dir_path = PathBuf::from(HYTALE_DOWNLOADER_BIN);
+    if current_dir_path.exists() {
+        debug!("Found hytale-downloader in current directory");
+        return Ok(current_dir_path);
+    }
+
+    #[cfg(windows)]
+    {
+        let current_dir_path = PathBuf::from(format!("{}.exe", HYTALE_DOWNLOADER_BIN));
+        if current_dir_path.exists() {
+            debug!("Found hytale-downloader.exe in current directory");
+            return Ok(current_dir_path);
+        }
+    }
+
+    anyhow::bail!(
+        "hytale-downloader not found. Please install it or set 'downloader_path' in config.\n\
+         Expected locations:\n\
+         - In PATH\n\
+         - Next to hytale-runner executable\n\
+         - In current directory\n\
+         - Configured via 'downloader_path' in config file"
+    )
 }

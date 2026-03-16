@@ -20,6 +20,8 @@ pub struct AppConfig {
     pub jvm: JvmConfig,
     pub auth: AuthConfig,
     pub update: UpdateConfig,
+    /// Path to hytale-downloader binary
+    pub downloader_path: Option<String>,
 }
 
 /// Default server settings
@@ -129,30 +131,6 @@ impl AppConfig {
 
         Ok(config)
     }
-
-    /// Save authentication tokens to global config
-    pub fn save_auth(&self) -> Result<()> {
-        let config_dir = global_config_dir().context("Could not determine config directory")?;
-        std::fs::create_dir_all(&config_dir).context("Failed to create config directory")?;
-
-        let config_path = config_dir.join(GLOBAL_CONFIG_FILE);
-
-        // Load existing config or create new
-        let mut config = if config_path.exists() {
-            load_config_file(&config_path)?
-        } else {
-            AppConfig::default()
-        };
-
-        // Update auth
-        config.auth = self.auth.clone();
-
-        // Save
-        let yaml = serde_yaml::to_string(&config).context("Failed to serialize config")?;
-        std::fs::write(&config_path, yaml).context("Failed to write config file")?;
-
-        Ok(())
-    }
 }
 
 /// Get the global configuration directory
@@ -209,5 +187,6 @@ fn merge_configs(base: AppConfig, overlay: AppConfig) -> AppConfig {
             base.auth
         },
         update: overlay.update,
+        downloader_path: overlay.downloader_path.or(base.downloader_path),
     }
 }

@@ -47,13 +47,12 @@ zip = "2"
 # Directories
 dirs = "5"
 
+# Find executables in PATH
+which = "7"
+
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# OAuth2 (for server file download)
-oauth2 = "4"
-open = "5"
 
 # Date/time
 chrono = { version = "0.4", features = ["serde"] }

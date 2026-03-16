@@ -94,7 +94,7 @@ async fn run_server_loop(
     server_dir: &Path,
     java_path: &Path,
 ) -> Result<()> {
-    let updater = ServerUpdater::new(server_dir.to_path_buf());
+    let updater = ServerUpdater::new(server_dir.to_path_buf(), config);
     let runner = ServerRunner::new(
         config.clone(),
         server_dir.to_path_buf(),
