@@ -4,8 +4,8 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use tracing::{debug, trace};
 
-use super::platform::{get_java_search_paths, java_executable_name};
 use super::JavaInfo;
+use super::platform::{get_java_search_paths, java_executable_name};
 
 /// Detects installed Java versions
 pub struct JavaDetector {

@@ -108,7 +108,10 @@ impl AppConfig {
         };
 
         if global_config_path.exists() {
-            debug!("Loading global config from: {}", global_config_path.display());
+            debug!(
+                "Loading global config from: {}",
+                global_config_path.display()
+            );
             let global_config = load_config_file(&global_config_path)?;
             config = merge_configs(config, global_config);
         }

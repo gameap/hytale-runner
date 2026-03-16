@@ -60,8 +60,7 @@ impl ServerUpdater {
                     .context("Failed to create backup of current server")?;
             }
 
-            fs::copy(&staged_jar, &dest_jar)
-                .context("Failed to copy updated server JAR")?;
+            fs::copy(&staged_jar, &dest_jar).context("Failed to copy updated server JAR")?;
         }
 
         // Copy AOT cache if present
@@ -69,8 +68,7 @@ impl ServerUpdater {
         if staged_aot.exists() {
             let dest_aot = self.server_dir.join("HytaleServer.aot");
             debug!("Copying {} to {}", staged_aot.display(), dest_aot.display());
-            fs::copy(&staged_aot, &dest_aot)
-                .context("Failed to copy updated AOT cache")?;
+            fs::copy(&staged_aot, &dest_aot).context("Failed to copy updated AOT cache")?;
         }
 
         // Copy assets if present
@@ -82,8 +80,7 @@ impl ServerUpdater {
                 staged_assets.display(),
                 dest_assets.display()
             );
-            fs::copy(&staged_assets, &dest_assets)
-                .context("Failed to copy updated assets")?;
+            fs::copy(&staged_assets, &dest_assets).context("Failed to copy updated assets")?;
         }
 
         // Remove staging directory
@@ -100,7 +97,9 @@ impl ServerUpdater {
         // For now, just check if there's a staged update
         if self.has_staged_update() {
             return Ok(Some(UpdateInfo {
-                current_version: self.get_current_version()?.unwrap_or_else(|| "unknown".to_string()),
+                current_version: self
+                    .get_current_version()?
+                    .unwrap_or_else(|| "unknown".to_string()),
                 new_version: "staged".to_string(),
             }));
         }

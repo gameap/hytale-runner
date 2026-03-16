@@ -253,7 +253,11 @@ impl HytaleClient {
             .await
             .context("Failed to parse error response")?;
 
-        anyhow::bail!("{}: {}", error.error, error.error_description.unwrap_or_default())
+        anyhow::bail!(
+            "{}: {}",
+            error.error,
+            error.error_description.unwrap_or_default()
+        )
     }
 
     /// Refresh access token
@@ -294,9 +298,12 @@ impl HytaleClient {
         let mut config = self.config.clone();
         config.auth.access_token = Some(token.access_token.clone());
         config.auth.refresh_token = token.refresh_token.clone();
-        config.auth.expires_at = Some(Utc::now() + chrono::Duration::seconds(token.expires_in as i64));
+        config.auth.expires_at =
+            Some(Utc::now() + chrono::Duration::seconds(token.expires_in as i64));
 
-        config.save_auth().context("Failed to save authentication tokens")?;
+        config
+            .save_auth()
+            .context("Failed to save authentication tokens")?;
 
         info!("Authentication tokens saved");
         Ok(())

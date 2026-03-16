@@ -121,11 +121,7 @@ fn extract_java_archive(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf>
 
 /// Find the Java executable in the extracted directory
 fn find_java_executable(java_home: &Path) -> Result<PathBuf> {
-    let java_name = if cfg!(windows) {
-        "java.exe"
-    } else {
-        "java"
-    };
+    let java_name = if cfg!(windows) { "java.exe" } else { "java" };
 
     // Try standard location
     let java_bin = java_home.join("bin").join(java_name);

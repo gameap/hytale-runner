@@ -98,12 +98,7 @@ impl AdoptiumClient {
             .context("Failed to parse Adoptium API response")?;
 
         if releases.is_empty() {
-            anyhow::bail!(
-                "No Java {} release found for {} {}",
-                version,
-                os,
-                arch
-            );
+            anyhow::bail!("No Java {} release found for {} {}", version, os, arch);
         }
 
         let release = releases.into_iter().next().unwrap();
@@ -113,7 +108,6 @@ impl AdoptiumClient {
             version_data: release.version,
         })
     }
-
 }
 
 impl Default for AdoptiumClient {

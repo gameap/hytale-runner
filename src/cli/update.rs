@@ -61,7 +61,10 @@ fn show_status(updater: &ServerUpdater) -> Result<()> {
     println!("Server Status");
     println!("=============");
     println!();
-    println!("Server installed: {}", if status.is_installed { "yes" } else { "no" });
+    println!(
+        "Server installed: {}",
+        if status.is_installed { "yes" } else { "no" }
+    );
 
     if let Some(version) = status.current_version {
         println!("Current version: {}", version);

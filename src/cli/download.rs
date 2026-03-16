@@ -21,7 +21,10 @@ pub async fn execute(args: &DownloadArgs, cli: &Cli) -> Result<()> {
     let downloader = ServerDownloader::new(&config)?;
 
     // Download server files
-    info!("Downloading Hytale server files (patchline: {})...", args.patchline);
+    info!(
+        "Downloading Hytale server files (patchline: {})...",
+        args.patchline
+    );
     downloader.download_all(&server_dir, args.force).await?;
 
     info!("Download complete!");

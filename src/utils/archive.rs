@@ -68,9 +68,8 @@ pub fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<()> {
             let mut outfile = File::create(&outpath)
                 .with_context(|| format!("Failed to create file: {}", outpath.display()))?;
 
-            std::io::copy(&mut file, &mut outfile).with_context(|| {
-                format!("Failed to extract file: {}", outpath.display())
-            })?;
+            std::io::copy(&mut file, &mut outfile)
+                .with_context(|| format!("Failed to extract file: {}", outpath.display()))?;
         }
 
         // Set permissions on Unix

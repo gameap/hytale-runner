@@ -98,7 +98,10 @@ mod tests {
         file.write_all(b"Hello, World!").unwrap();
         file.flush().unwrap();
 
-        let result = verify_sha256(file.path(), "0000000000000000000000000000000000000000000000000000000000000000");
+        let result = verify_sha256(
+            file.path(),
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
 
         assert!(result.is_err());
     }

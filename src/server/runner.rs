@@ -38,7 +38,10 @@ impl ServerRunner {
         let aot_path = self.server_dir.join("HytaleServer.aot");
 
         if !jar_path.exists() {
-            anyhow::bail!("HytaleServer.jar not found in {}", self.server_dir.display());
+            anyhow::bail!(
+                "HytaleServer.jar not found in {}",
+                self.server_dir.display()
+            );
         }
 
         if !assets_path.exists() {

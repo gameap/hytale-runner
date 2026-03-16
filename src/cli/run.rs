@@ -95,7 +95,11 @@ async fn run_server_loop(
     java_path: &Path,
 ) -> Result<()> {
     let updater = ServerUpdater::new(server_dir.to_path_buf());
-    let runner = ServerRunner::new(config.clone(), server_dir.to_path_buf(), java_path.to_path_buf());
+    let runner = ServerRunner::new(
+        config.clone(),
+        server_dir.to_path_buf(),
+        java_path.to_path_buf(),
+    );
 
     loop {
         // Apply staged update if present

@@ -25,8 +25,7 @@ impl ServerDownloader {
 
     /// Download all server files
     pub async fn download_all(&self, server_dir: &Path, force: bool) -> Result<()> {
-        std::fs::create_dir_all(server_dir)
-            .context("Failed to create server directory")?;
+        std::fs::create_dir_all(server_dir).context("Failed to create server directory")?;
 
         let jar_path = server_dir.join("HytaleServer.jar");
         let assets_path = server_dir.join("Assets.zip");

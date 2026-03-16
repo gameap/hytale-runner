@@ -38,7 +38,11 @@ fn get_windows_paths() -> Vec<PathBuf> {
 
     // User-local installations
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        paths.push(PathBuf::from(&local_app_data).join("Programs").join("Eclipse Adoptium"));
+        paths.push(
+            PathBuf::from(&local_app_data)
+                .join("Programs")
+                .join("Eclipse Adoptium"),
+        );
     }
 
     paths
@@ -72,7 +76,11 @@ fn get_macos_paths() -> Vec<PathBuf> {
 
     // User-local installations
     if let Some(home) = dirs::home_dir() {
-        paths.push(home.join("Library").join("Java").join("JavaVirtualMachines"));
+        paths.push(
+            home.join("Library")
+                .join("Java")
+                .join("JavaVirtualMachines"),
+        );
         paths.push(home.join(".sdkman").join("candidates").join("java"));
         paths.push(home.join(".jabba").join("jdk"));
     }
