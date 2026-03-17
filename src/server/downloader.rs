@@ -27,14 +27,16 @@ impl ServerDownloader {
 
         // Check if download is needed
         if !force {
-            let remote_version = self.get_remote_version().await?;
             if let Some(local_version) = Self::get_local_version(server_dir) {
+                // Only check remote version if we have a local version to compare
+                let remote_version = self.get_remote_version().await?;
                 if local_version == remote_version {
                     info!("Server files are up to date (version {})", local_version);
                     return Ok(());
                 }
                 info!("Update available: {} -> {}", local_version, remote_version);
             }
+            // No local version = first download, proceed without version check
         }
 
         info!("Downloading server files...");

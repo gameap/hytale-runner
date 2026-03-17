@@ -116,7 +116,22 @@ fn extract_java_archive(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf>
         anyhow::bail!("No JDK/JRE directory found in extracted archive");
     }
 
-    Ok(entries[0].path())
+    let extracted_subdir = entries[0].path();
+
+    // Move contents from extracted subdirectory up to dest_dir
+    // This flattens: jdk-25/jdk-25.0.2+10-jre/bin -> jdk-25/bin
+    for entry in std::fs::read_dir(&extracted_subdir)? {
+        let entry = entry?;
+        let src = entry.path();
+        let dest = dest_dir.join(entry.file_name());
+        std::fs::rename(&src, &dest)
+            .with_context(|| format!("Failed to move {:?} to {:?}", src, dest))?;
+    }
+
+    // Remove the now-empty subdirectory
+    std::fs::remove_dir(&extracted_subdir).ok();
+
+    Ok(dest_dir.to_path_buf())
 }
 
 /// Find the Java executable in the extracted directory
