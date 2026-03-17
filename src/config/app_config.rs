@@ -31,6 +31,7 @@ pub struct DefaultsConfig {
     pub memory_max: String,
     pub memory_min: String,
     pub port: u16,
+    pub ip: String,
     pub aot_enabled: bool,
 }
 
@@ -40,6 +41,7 @@ impl Default for DefaultsConfig {
             memory_max: "4G".to_string(),
             memory_min: "1G".to_string(),
             port: 5520,
+            ip: "0.0.0.0".to_string(),
             aot_enabled: true,
         }
     }
@@ -167,6 +169,11 @@ fn merge_configs(base: AppConfig, overlay: AppConfig) -> AppConfig {
                 overlay.defaults.port
             } else {
                 base.defaults.port
+            },
+            ip: if overlay.defaults.ip != DefaultsConfig::default().ip {
+                overlay.defaults.ip
+            } else {
+                base.defaults.ip
             },
             aot_enabled: overlay.defaults.aot_enabled,
         },

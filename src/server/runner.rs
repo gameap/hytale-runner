@@ -25,12 +25,14 @@ impl ServerRunner {
     }
 
     /// Run the server and return the exit code
+    #[allow(clippy::too_many_arguments)]
     pub async fn run(
         &self,
         memory_min: &str,
         memory_max: &str,
         aot_enabled: bool,
         port: u16,
+        ip: &str,
         assets_path: &PathBuf,
         jvm_args: Option<&str>,
     ) -> Result<i32> {
@@ -76,7 +78,7 @@ impl ServerRunner {
         // Server arguments
         cmd.arg("-jar").arg("HytaleServer.jar");
         cmd.arg("--assets").arg(assets_path);
-        cmd.arg("--bind").arg(format!("0.0.0.0:{}", port));
+        cmd.arg("--bind").arg(format!("{}:{}", ip, port));
 
         // Interactive console - inherit stdin/stdout/stderr
         cmd.stdin(Stdio::inherit());
@@ -84,7 +86,7 @@ impl ServerRunner {
         cmd.stderr(Stdio::inherit());
 
         debug!("Starting server with command: {:?}", cmd);
-        info!("Starting Hytale server on port {}...", port);
+        info!("Starting Hytale server on {}:{}...", ip, port);
 
         let mut child = cmd.spawn().context("Failed to start server process")?;
 

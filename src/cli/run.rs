@@ -16,7 +16,7 @@ pub async fn execute(args: &RunArgs, cli: &Cli) -> Result<()> {
     let server_dir = cli
         .dir
         .clone()
-        .unwrap_or_else(|| std::env::current_dir().unwrap());
+        .unwrap_or_else(|| std::env::current_dir().unwrap().join("Server"));
 
     info!("Server directory: {}", server_dir.display());
 
@@ -136,6 +136,13 @@ async fn run_server_loop(
             .clone()
             .unwrap_or_else(|| server_dir.join("Assets.zip"));
 
+        // Determine IP address
+        let ip = if args.ip != "0.0.0.0" {
+            args.ip.clone()
+        } else {
+            config.defaults.ip.clone()
+        };
+
         // Run the server
         let exit_code = runner
             .run(
@@ -143,6 +150,7 @@ async fn run_server_loop(
                 &memory_max,
                 aot_enabled,
                 args.port,
+                &ip,
                 &assets_path,
                 args.jvm_args.as_deref(),
             )

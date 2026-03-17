@@ -13,7 +13,7 @@ use clap::{Parser, Subcommand};
 #[command(name = "hytale-runner")]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
-    /// Server directory (default: current directory)
+    /// Server directory (default: ./Server/)
     #[arg(short = 'd', long, global = true)]
     pub dir: Option<PathBuf>,
 
@@ -56,6 +56,10 @@ pub struct RunArgs {
     /// Server port (default: 5520)
     #[arg(long, default_value = "5520")]
     pub port: u16,
+
+    /// IP address to bind to (default: 0.0.0.0)
+    #[arg(long, default_value = "0.0.0.0")]
+    pub ip: String,
 
     /// Max memory, e.g., 4G
     #[arg(long)]
