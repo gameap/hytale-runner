@@ -22,8 +22,14 @@ async fn main() -> Result<()> {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
     };
 
+    let is_tty = std::io::IsTerminal::is_terminal(&std::io::stderr());
+    if !is_tty {
+        // SAFETY: Called early in main before any threads are spawned
+        unsafe { std::env::set_var("NO_COLOR", "1") };
+    }
+
     tracing_subscriber::registry()
-        .with(fmt::layer().with_target(false))
+        .with(fmt::layer().with_target(false).with_ansi(is_tty))
         .with(filter)
         .init();
 
