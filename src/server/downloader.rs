@@ -67,6 +67,23 @@ impl ServerDownloader {
         info!("Extracting server files...");
         crate::utils::archive::extract_zip(&zip_path, server_dir)?;
 
+        // Flatten Server/ subdirectory if it exists
+        // The ZIP may extract to Server/HytaleServer.jar but we need it at root
+        let server_subdir = server_dir.join("Server");
+        if server_subdir.is_dir() {
+            for entry in std::fs::read_dir(&server_subdir)? {
+                let entry = entry?;
+                let src = entry.path();
+                let dest = server_dir.join(entry.file_name());
+                if !dest.exists() {
+                    std::fs::rename(&src, &dest)
+                        .with_context(|| format!("Failed to move {:?} to {:?}", src, dest))?;
+                }
+            }
+            // Remove the now-empty subdirectory
+            std::fs::remove_dir(&server_subdir).ok();
+        }
+
         // Get version and save it
         let version = self.get_remote_version().await?;
         Self::save_version(server_dir, &version)?;
