@@ -26,18 +26,29 @@ impl ServerDownloader {
     pub async fn download_all(&self, server_dir: &Path, force: bool) -> Result<()> {
         std::fs::create_dir_all(server_dir).context("Failed to create server directory")?;
 
-        info!("Running hytale-downloader to check and download server files...");
+        // Check if download is needed
+        if !force {
+            let remote_version = self.get_remote_version().await?;
+            if let Some(local_version) = Self::get_local_version(server_dir) {
+                if local_version == remote_version {
+                    info!("Server files are up to date (version {})", local_version);
+                    return Ok(());
+                }
+                info!("Update available: {} -> {}", local_version, remote_version);
+            }
+        }
+
+        info!("Downloading server files...");
+
+        // Download to temp zip file
+        let zip_path = server_dir.join("server-download.zip");
 
         let mut cmd = Command::new(&self.downloader_path);
-        cmd.arg("--output")
-            .arg(server_dir)
+        cmd.arg("-download-path")
+            .arg(&zip_path)
             .stdin(Stdio::inherit())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-
-        if force {
-            cmd.arg("--force");
-        }
 
         debug!("Executing: {:?}", cmd);
 
@@ -104,35 +115,70 @@ impl ServerDownloader {
             anyhow::bail!("hytale-downloader exited with code {}", code);
         }
 
-        info!("Server files downloaded successfully");
+        // Extract zip to server directory
+        info!("Extracting server files...");
+        crate::utils::archive::extract_zip(&zip_path, server_dir)?;
+
+        // Get version and save it
+        let version = self.get_remote_version().await?;
+        Self::save_version(server_dir, &version)?;
+
+        // Clean up zip file
+        std::fs::remove_file(&zip_path).ok();
+
+        info!("Server files downloaded successfully (version {})", version);
         Ok(())
     }
 
-    /// Check if server files need updating using hytale-downloader
+    /// Check if server files need updating
     pub async fn check_updates(&self, server_dir: &Path) -> Result<bool> {
         info!("Checking for server updates...");
 
+        let remote_version = self.get_remote_version().await?;
+
+        if let Some(local_version) = Self::get_local_version(server_dir) {
+            let has_update = local_version != remote_version;
+            if has_update {
+                info!("Update available: {} -> {}", local_version, remote_version);
+            } else {
+                info!("Server is up to date (version {})", local_version);
+            }
+            Ok(has_update)
+        } else {
+            // No local version = needs download
+            Ok(true)
+        }
+    }
+
+    /// Get the remote version from hytale-downloader
+    async fn get_remote_version(&self) -> Result<String> {
         let output = Command::new(&self.downloader_path)
-            .arg("--output")
-            .arg(server_dir)
-            .arg("--check")
+            .arg("-print-version")
             .output()
             .await
-            .context("Failed to execute hytale-downloader for update check")?;
+            .context("Failed to get version from hytale-downloader")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            debug!("hytale-downloader check failed: {}", stderr);
-            return Ok(false);
+            anyhow::bail!("hytale-downloader -print-version failed: {}", stderr);
         }
 
-        // Parse output to determine if updates are available
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let has_updates = stdout.contains("update available")
-            || stdout.contains("needs update")
-            || stdout.contains("outdated");
+        let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(version)
+    }
 
-        Ok(has_updates)
+    /// Get the local installed version from version.txt
+    fn get_local_version(server_dir: &Path) -> Option<String> {
+        let version_file = server_dir.join("version.txt");
+        std::fs::read_to_string(version_file)
+            .ok()
+            .map(|s| s.trim().to_string())
+    }
+
+    /// Save version to version.txt
+    fn save_version(server_dir: &Path, version: &str) -> Result<()> {
+        let version_file = server_dir.join("version.txt");
+        std::fs::write(version_file, version).context("Failed to save version file")
     }
 }
 
