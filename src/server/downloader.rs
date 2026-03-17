@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use anyhow::{Context, Result};
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tracing::{debug, info};
 
@@ -47,71 +46,18 @@ impl ServerDownloader {
         cmd.arg("-download-path")
             .arg(&zip_path)
             .stdin(Stdio::inherit())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit());
 
         debug!("Executing: {:?}", cmd);
 
-        let mut child = cmd.spawn().context("Failed to execute hytale-downloader")?;
-
-        let stdout = child.stdout.take().expect("stdout was piped");
-        let stderr = child.stderr.take().expect("stderr was piped");
-
-        let mut captured_output = String::new();
-
-        // Stream and capture stdout
-        let stdout_handle = tokio::spawn(async move {
-            let mut output = String::new();
-            let mut reader = BufReader::new(stdout).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                println!("{}", line);
-                output.push_str(&line);
-                output.push('\n');
-            }
-            output
-        });
-
-        // Stream and capture stderr
-        let stderr_handle = tokio::spawn(async move {
-            let mut output = String::new();
-            let mut reader = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                eprintln!("{}", line);
-                output.push_str(&line);
-                output.push('\n');
-            }
-            output
-        });
-
-        let status = child
-            .wait()
+        let status = cmd
+            .status()
             .await
-            .context("Failed to wait for hytale-downloader")?;
-
-        // Collect captured output
-        if let Ok(stdout_output) = stdout_handle.await {
-            captured_output.push_str(&stdout_output);
-        }
-        if let Ok(stderr_output) = stderr_handle.await {
-            captured_output.push_str(&stderr_output);
-        }
+            .context("Failed to execute hytale-downloader")?;
 
         if !status.success() {
             let code = status.code().unwrap_or(-1);
-
-            // Check for 403 Forbidden error
-            if captured_output.contains("403 Forbidden")
-                || captured_output.contains("HTTP status: 403")
-            {
-                anyhow::bail!(
-                    "hytale-downloader exited with code {}\n\n\
-                     Note: HTTP 403 Forbidden error detected.\n\
-                     This usually means the game has not been purchased.\n\
-                     Please purchase Hytale at https://hytale.com to download server files.",
-                    code
-                );
-            }
-
             anyhow::bail!("hytale-downloader exited with code {}", code);
         }
 
