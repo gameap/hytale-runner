@@ -10,7 +10,7 @@ pub async fn execute(args: &UpdateArgs, cli: &Cli) -> Result<()> {
     let server_dir = cli
         .dir
         .clone()
-        .unwrap_or_else(|| std::env::current_dir().unwrap().join("Server"));
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
 
     let config = AppConfig::load(cli.config.as_ref(), &server_dir)?;
     let updater = ServerUpdater::new(server_dir, &config);

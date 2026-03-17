@@ -13,14 +13,24 @@ pub struct ServerRunner {
     config: AppConfig,
     server_dir: PathBuf,
     java_path: PathBuf,
+    jar_path: PathBuf,
+    aot_path: PathBuf,
 }
 
 impl ServerRunner {
-    pub fn new(config: AppConfig, server_dir: PathBuf, java_path: PathBuf) -> Self {
+    pub fn new(
+        config: AppConfig,
+        server_dir: PathBuf,
+        java_path: PathBuf,
+        jar_path: PathBuf,
+        aot_path: PathBuf,
+    ) -> Self {
         Self {
             config,
             server_dir,
             java_path,
+            jar_path,
+            aot_path,
         }
     }
 
@@ -36,14 +46,8 @@ impl ServerRunner {
         assets_path: &PathBuf,
         jvm_args: Option<&str>,
     ) -> Result<i32> {
-        let jar_path = self.server_dir.join("HytaleServer.jar");
-        let aot_path = self.server_dir.join("HytaleServer.aot");
-
-        if !jar_path.exists() {
-            anyhow::bail!(
-                "HytaleServer.jar not found in {}",
-                self.server_dir.display()
-            );
+        if !self.jar_path.exists() {
+            anyhow::bail!("HytaleServer.jar not found at {}", self.jar_path.display());
         }
 
         if !assets_path.exists() {
@@ -58,9 +62,9 @@ impl ServerRunner {
         cmd.arg(format!("-Xmx{}", memory_max));
 
         // AOT cache if enabled and exists
-        if aot_enabled && aot_path.exists() {
-            info!("Using AOT cache: {}", aot_path.display());
-            cmd.arg(format!("-XX:AOTCache={}", aot_path.display()));
+        if aot_enabled && self.aot_path.exists() {
+            info!("Using AOT cache: {}", self.aot_path.display());
+            cmd.arg(format!("-XX:AOTCache={}", self.aot_path.display()));
         }
 
         // Additional JVM arguments from config
@@ -76,7 +80,7 @@ impl ServerRunner {
         }
 
         // Server arguments
-        cmd.arg("-jar").arg("HytaleServer.jar");
+        cmd.arg("-jar").arg(&self.jar_path);
         cmd.arg("--assets").arg(assets_path);
         cmd.arg("--bind").arg(format!("{}:{}", ip, port));
 

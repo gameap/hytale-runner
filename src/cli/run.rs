@@ -16,9 +16,20 @@ pub async fn execute(args: &RunArgs, cli: &Cli) -> Result<()> {
     let server_dir = cli
         .dir
         .clone()
-        .unwrap_or_else(|| std::env::current_dir().unwrap().join("Server"));
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
 
     info!("Server directory: {}", server_dir.display());
+
+    // Calculate jar and aot paths with defaults
+    let jar_path = args
+        .jar_path
+        .clone()
+        .unwrap_or_else(|| server_dir.join("Server/HytaleServer.jar"));
+
+    let aot_path = args
+        .aot_path
+        .clone()
+        .unwrap_or_else(|| server_dir.join("Server/HytaleServer.aot"));
 
     // Load configuration
     let config = AppConfig::load(cli.config.as_ref(), &server_dir)?;
@@ -28,10 +39,10 @@ pub async fn execute(args: &RunArgs, cli: &Cli) -> Result<()> {
     info!("Using Java: {}", java_path.display());
 
     // Ensure server files are available
-    ensure_server_files(&server_dir, &config).await?;
+    ensure_server_files(&server_dir, &jar_path, &config).await?;
 
     // Run the server with auto-update loop
-    run_server_loop(args, &config, &server_dir, &java_path).await
+    run_server_loop(args, &config, &server_dir, &java_path, &jar_path, &aot_path).await
 }
 
 /// Ensure Java is available, installing if necessary
@@ -71,9 +82,8 @@ async fn ensure_java(args: &RunArgs, config: &AppConfig) -> Result<PathBuf> {
 }
 
 /// Ensure server files are available, downloading if necessary
-async fn ensure_server_files(server_dir: &Path, config: &AppConfig) -> Result<()> {
-    let jar_path = server_dir.join("HytaleServer.jar");
-    let assets_path = server_dir.join("Assets.zip");
+async fn ensure_server_files(server_dir: &Path, jar_path: &Path, config: &AppConfig) -> Result<()> {
+    let assets_path = server_dir.join("Server/Assets.zip");
 
     if jar_path.exists() && assets_path.exists() {
         info!("Server files found");
@@ -93,12 +103,16 @@ async fn run_server_loop(
     config: &AppConfig,
     server_dir: &Path,
     java_path: &Path,
+    jar_path: &Path,
+    aot_path: &Path,
 ) -> Result<()> {
     let updater = ServerUpdater::new(server_dir.to_path_buf(), config);
     let runner = ServerRunner::new(
         config.clone(),
         server_dir.to_path_buf(),
         java_path.to_path_buf(),
+        jar_path.to_path_buf(),
+        aot_path.to_path_buf(),
     );
 
     loop {
@@ -134,7 +148,7 @@ async fn run_server_loop(
         let assets_path = args
             .assets
             .clone()
-            .unwrap_or_else(|| server_dir.join("Assets.zip"));
+            .unwrap_or_else(|| server_dir.join("Server/Assets.zip"));
 
         // Determine IP address
         let ip = if args.ip != "0.0.0.0" {

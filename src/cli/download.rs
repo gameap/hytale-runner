@@ -10,7 +10,7 @@ pub async fn execute(args: &DownloadArgs, cli: &Cli) -> Result<()> {
     let server_dir = cli
         .dir
         .clone()
-        .unwrap_or_else(|| std::env::current_dir().unwrap().join("Server"));
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
 
     info!("Server directory: {}", server_dir.display());
 

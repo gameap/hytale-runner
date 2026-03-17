@@ -56,15 +56,19 @@ impl ServerUpdater {
             anyhow::bail!("No staged update found");
         }
 
+        // Destination is the Server subdirectory
+        let dest_dir = self.server_dir.join("Server");
+        fs::create_dir_all(&dest_dir).context("Failed to create Server directory")?;
+
         // Copy server files
         let staged_jar = staging_dir.join("Server").join("HytaleServer.jar");
         if staged_jar.exists() {
-            let dest_jar = self.server_dir.join("HytaleServer.jar");
+            let dest_jar = dest_dir.join("HytaleServer.jar");
             debug!("Copying {} to {}", staged_jar.display(), dest_jar.display());
 
             // Create backup of current jar
             if dest_jar.exists() {
-                let backup_jar = self.server_dir.join("HytaleServer.jar.bak");
+                let backup_jar = dest_dir.join("HytaleServer.jar.bak");
                 fs::copy(&dest_jar, &backup_jar)
                     .context("Failed to create backup of current server")?;
             }
@@ -75,15 +79,15 @@ impl ServerUpdater {
         // Copy AOT cache if present
         let staged_aot = staging_dir.join("Server").join("HytaleServer.aot");
         if staged_aot.exists() {
-            let dest_aot = self.server_dir.join("HytaleServer.aot");
+            let dest_aot = dest_dir.join("HytaleServer.aot");
             debug!("Copying {} to {}", staged_aot.display(), dest_aot.display());
             fs::copy(&staged_aot, &dest_aot).context("Failed to copy updated AOT cache")?;
         }
 
         // Copy assets if present
-        let staged_assets = staging_dir.join("Assets.zip");
+        let staged_assets = staging_dir.join("Server").join("Assets.zip");
         if staged_assets.exists() {
-            let dest_assets = self.server_dir.join("Assets.zip");
+            let dest_assets = dest_dir.join("Assets.zip");
             debug!(
                 "Copying {} to {}",
                 staged_assets.display(),
@@ -129,7 +133,7 @@ impl ServerUpdater {
 
     /// Get the current server status
     pub async fn get_status(&self) -> Result<ServerStatus> {
-        let jar_path = self.server_dir.join("HytaleServer.jar");
+        let jar_path = self.server_dir.join("Server").join("HytaleServer.jar");
 
         let has_remote_update = if let Some(ref downloader) = self.downloader {
             downloader

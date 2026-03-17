@@ -13,7 +13,7 @@ use clap::{Parser, Subcommand};
 #[command(name = "hytale-runner")]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
-    /// Server directory (default: ./Server/)
+    /// Server directory (default: current directory)
     #[arg(short = 'd', long, global = true)]
     pub dir: Option<PathBuf>,
 
@@ -80,6 +80,14 @@ pub struct RunArgs {
     /// Custom Java binary path
     #[arg(long)]
     pub java_path: Option<PathBuf>,
+
+    /// Path to HytaleServer.jar (default: Server/HytaleServer.jar)
+    #[arg(long)]
+    pub jar_path: Option<PathBuf>,
+
+    /// Path to HytaleServer.aot (default: Server/HytaleServer.aot)
+    #[arg(long)]
+    pub aot_path: Option<PathBuf>,
 
     /// Additional JVM arguments
     #[arg(long)]
