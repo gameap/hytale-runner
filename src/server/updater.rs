@@ -85,9 +85,9 @@ impl ServerUpdater {
         }
 
         // Copy assets if present
-        let staged_assets = staging_dir.join("Server").join("Assets.zip");
+        let staged_assets = staging_dir.join("Assets.zip");
         if staged_assets.exists() {
-            let dest_assets = dest_dir.join("Assets.zip");
+            let dest_assets = self.server_dir.join("Assets.zip");
             debug!(
                 "Copying {} to {}",
                 staged_assets.display(),

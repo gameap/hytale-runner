@@ -83,7 +83,7 @@ async fn ensure_java(args: &RunArgs, config: &AppConfig) -> Result<PathBuf> {
 
 /// Ensure server files are available, downloading if necessary
 async fn ensure_server_files(server_dir: &Path, jar_path: &Path, config: &AppConfig) -> Result<()> {
-    let assets_path = server_dir.join("Server/Assets.zip");
+    let assets_path = server_dir.join("Assets.zip");
 
     if jar_path.exists() && assets_path.exists() {
         info!("Server files found");
@@ -148,7 +148,7 @@ async fn run_server_loop(
         let assets_path = args
             .assets
             .clone()
-            .unwrap_or_else(|| server_dir.join("Server/Assets.zip"));
+            .unwrap_or_else(|| server_dir.join("Assets.zip"));
 
         // Determine IP address
         let ip = if args.ip != "0.0.0.0" {
