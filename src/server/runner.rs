@@ -45,6 +45,11 @@ impl ServerRunner {
         ip: &str,
         assets_path: &PathBuf,
         jvm_args: Option<&str>,
+        accept_early_plugins: bool,
+        allow_op: bool,
+        backup_enabled: bool,
+        backup_dir: Option<&PathBuf>,
+        backup_frequency: Option<u16>,
     ) -> Result<i32> {
         if !self.jar_path.exists() {
             anyhow::bail!("HytaleServer.jar not found at {}", self.jar_path.display());
@@ -83,6 +88,27 @@ impl ServerRunner {
         cmd.arg("-jar").arg(&self.jar_path);
         cmd.arg("--assets").arg(assets_path);
         cmd.arg("--bind").arg(format!("{}:{}", ip, port));
+
+        // Early plugins acceptance
+        if accept_early_plugins {
+            cmd.arg("--accept-early-plugins");
+        }
+
+        // Allow op
+        if allow_op {
+            cmd.arg("--allow-op");
+        }
+
+        // Backup settings
+        if backup_enabled {
+            cmd.arg("--backup");
+            if let Some(dir) = backup_dir {
+                cmd.arg("--backup-dir").arg(dir);
+            }
+            if let Some(freq) = backup_frequency {
+                cmd.arg("--backup-frequency").arg(freq.to_string());
+            }
+        }
 
         // Interactive console - inherit stdin/stdout/stderr
         cmd.stdin(Stdio::inherit());

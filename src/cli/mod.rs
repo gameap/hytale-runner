@@ -96,6 +96,26 @@ pub struct RunArgs {
     /// Exit on code 8 instead of applying updates
     #[arg(long)]
     pub no_restart: bool,
+
+    /// Acknowledge that loading early plugins is unsupported
+    #[arg(long)]
+    pub accept_early_plugins: bool,
+
+    /// Allow op commands
+    #[arg(long)]
+    pub allow_op: bool,
+
+    /// Enable automatic backups
+    #[arg(long)]
+    pub backup: bool,
+
+    /// Backup directory
+    #[arg(long)]
+    pub backup_dir: Option<PathBuf>,
+
+    /// Backup frequency in minutes
+    #[arg(long)]
+    pub backup_frequency: Option<u16>,
 }
 
 #[derive(Parser, Debug)]
