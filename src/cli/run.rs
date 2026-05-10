@@ -98,6 +98,7 @@ async fn ensure_server_files(server_dir: &Path, jar_path: &Path, config: &AppCon
 }
 
 /// Run the server with auto-update loop
+#[allow(clippy::too_many_arguments)]
 async fn run_server_loop(
     args: &RunArgs,
     config: &AppConfig,
@@ -157,6 +158,27 @@ async fn run_server_loop(
             config.defaults.ip.clone()
         };
 
+        // Determine accept_early_plugins (CLI overrides config)
+        let accept_early_plugins =
+            args.accept_early_plugins || config.defaults.accept_early_plugins;
+
+        // Determine allow_op (CLI overrides config)
+        let allow_op = args.allow_op || config.defaults.allow_op;
+
+        // Determine backup settings
+        let backup_enabled = args.backup || config.defaults.backup.enabled;
+        let backup_dir: Option<PathBuf> =
+            args.backup_dir
+                .clone()
+                .or(config.defaults.backup.path.clone());
+        let backup_frequency = args.backup_frequency.or_else(|| {
+            if config.defaults.backup.frequency != 0 {
+                Some(config.defaults.backup.frequency)
+            } else {
+                None
+            }
+        });
+
         // Run the server
         let exit_code = runner
             .run(
@@ -167,6 +189,11 @@ async fn run_server_loop(
                 &ip,
                 &assets_path,
                 args.jvm_args.as_deref(),
+                accept_early_plugins,
+                allow_op,
+                backup_enabled,
+                backup_dir.as_ref(),
+                backup_frequency,
             )
             .await?;
 

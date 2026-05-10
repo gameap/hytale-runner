@@ -33,6 +33,9 @@ pub struct DefaultsConfig {
     pub port: u16,
     pub ip: String,
     pub aot_enabled: bool,
+    pub accept_early_plugins: bool,
+    pub allow_op: bool,
+    pub backup: BackupConfig,
 }
 
 impl Default for DefaultsConfig {
@@ -43,6 +46,9 @@ impl Default for DefaultsConfig {
             port: 5520,
             ip: "0.0.0.0".to_string(),
             aot_enabled: true,
+            accept_early_plugins: false,
+            allow_op: false,
+            backup: BackupConfig::default(),
         }
     }
 }
@@ -86,6 +92,15 @@ pub struct AuthConfig {
 pub struct UpdateConfig {
     pub enabled: bool,
     pub auto_apply: bool,
+}
+
+/// Backup configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct BackupConfig {
+    pub enabled: bool,
+    pub path: Option<PathBuf>,
+    pub frequency: u16,
 }
 
 impl Default for UpdateConfig {
@@ -174,6 +189,32 @@ fn merge_configs(base: AppConfig, overlay: AppConfig) -> AppConfig {
                 overlay.defaults.ip
             } else {
                 base.defaults.ip
+            },
+            accept_early_plugins: if overlay.defaults.accept_early_plugins
+                != DefaultsConfig::default().accept_early_plugins
+            {
+                overlay.defaults.accept_early_plugins
+            } else {
+                base.defaults.accept_early_plugins
+            },
+            allow_op: if overlay.defaults.allow_op != DefaultsConfig::default().allow_op {
+                overlay.defaults.allow_op
+            } else {
+                base.defaults.allow_op
+            },
+            backup: BackupConfig {
+                enabled: overlay.defaults.backup.enabled || base.defaults.backup.enabled,
+                path: overlay
+                    .defaults
+                    .backup
+                    .path
+                    .clone()
+                    .or(base.defaults.backup.path.clone()),
+                frequency: if overlay.defaults.backup.frequency != 0 {
+                    overlay.defaults.backup.frequency
+                } else {
+                    base.defaults.backup.frequency
+                },
             },
             aot_enabled: overlay.defaults.aot_enabled,
         },
