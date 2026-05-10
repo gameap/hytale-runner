@@ -171,13 +171,9 @@ async fn run_server_loop(
             args.backup_dir
                 .clone()
                 .or(config.defaults.backup.path.clone());
-        let backup_frequency = args.backup_frequency.or_else(|| {
-            if config.defaults.backup.frequency != 0 {
-                Some(config.defaults.backup.frequency)
-            } else {
-                None
-            }
-        });
+        let backup_frequency = args
+            .backup_frequency
+            .or((config.defaults.backup.frequency != 0).then_some(config.defaults.backup.frequency));
 
         // Run the server
         let exit_code = runner
