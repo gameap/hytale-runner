@@ -159,14 +159,18 @@ async fn run_server_loop(
         };
 
         // Determine accept_early_plugins (CLI overrides config)
-        let accept_early_plugins = args.accept_early_plugins || config.defaults.accept_early_plugins;
+        let accept_early_plugins =
+            args.accept_early_plugins || config.defaults.accept_early_plugins;
 
         // Determine allow_op (CLI overrides config)
         let allow_op = args.allow_op || config.defaults.allow_op;
 
         // Determine backup settings
         let backup_enabled = args.backup || config.defaults.backup.enabled;
-        let backup_dir: Option<PathBuf> = args.backup_dir.clone().or(config.defaults.backup.path.clone());
+        let backup_dir: Option<PathBuf> =
+            args.backup_dir
+                .clone()
+                .or(config.defaults.backup.path.clone());
         let backup_frequency = args.backup_frequency.or_else(|| {
             if config.defaults.backup.frequency != 0 {
                 Some(config.defaults.backup.frequency)
