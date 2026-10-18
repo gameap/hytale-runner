@@ -4,12 +4,16 @@ on:
   release:
     types: [created]
 
+permissions: {}
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
     name: Build (${{ matrix.target }})
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -53,6 +57,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -95,7 +101,7 @@ jobs:
           fi
 
       - name: Upload binary to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ matrix.asset_name }}
@@ -103,24 +109,101 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  checksums:
-    name: Generate checksums file
+      - name: Upload asset artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            ${{ matrix.asset_name }}
+            ${{ matrix.asset_name }}.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish checksums and S3 assets
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      APP_VERSION: ${{ github.event.release.tag_name }}
     steps:
-      - name: Download all release assets
-        uses: robinraju/release-downloader@v1
+      # Assets come from this run's artifacts rather than the release, and S3
+      # is only touched once every target has built, so latest/ never mixes
+      # binaries of two versions.
+      - name: Download assets
+        uses: actions/download-artifact@v4
         with:
-          tag: ${{ github.event.release.tag_name }}
-          fileName: "*.sha256"
+          pattern: release-*
+          path: dist
+          merge-multiple: true
 
       - name: Combine checksums
         run: |
-          cat *.sha256 > checksums.txt
+          cat dist/*.sha256 > dist/checksums.txt
 
       - name: Upload checksums
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: checksums.txt
+          files: dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload assets to S3
+        if: ${{ env.S3_ENDPOINT != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.S3_REGION || 'us-east-1' }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_PREFIX: ${{ secrets.S3_PREFIX || 'hytale-runner' }}
+        run: |
+          aws configure set default.s3.addressing_style path
+
+          shopt -s nullglob
+          assets=(dist/*)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "no release assets found in dist" >&2
+            exit 1
+          fi
+
+          for file in "${assets[@]}"; do
+            name=$(basename "${file}")
+            aws s3 cp "${file}" "s3://${S3_BUCKET}/${S3_PREFIX}/${APP_VERSION}/${name}" --endpoint-url "${S3_ENDPOINT}"
+            aws s3 cp "${file}" "s3://${S3_BUCKET}/${S3_PREFIX}/latest/${name}" --endpoint-url "${S3_ENDPOINT}"
+          done
+
+  releases-json:
+    name: Upload releases JSON to S3
+    runs-on: ubuntu-latest
+    needs: publish
+    permissions:
+      contents: read
+    env:
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+    steps:
+      - name: Fetch releases from GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            -o releases.json
+          jq empty releases.json
+
+      - name: Upload releases JSON to S3
+        if: ${{ env.S3_ENDPOINT != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.S3_REGION || 'us-east-1' }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_PREFIX: ${{ secrets.S3_PREFIX || 'hytale-runner' }}
+        run: |
+          aws configure set default.s3.addressing_style path
+
+          aws s3 cp releases.json "s3://${S3_BUCKET}/${S3_PREFIX}/releases.json" \
+            --endpoint-url "${S3_ENDPOINT}" \
+            --content-type "application/json"

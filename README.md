@@ -83,6 +83,9 @@ hytale-runner run --patchline pre-release
 
 # Pin the server to a specific version
 hytale-runner run --server-version 0.7.2
+
+# Allow op commands and enable backups every 30 minutes
+hytale-runner run --allow-op --backup --backup-dir backups --backup-frequency 30
 ```
 
 `--server-version` keeps the server on the given version: if it is not installed, the runner downloads it,
@@ -90,6 +93,16 @@ and staged updates are not applied. `hytale-downloader` can only download the la
 so a version that is no longer the latest can only be used if it is already installed.
 If `.hytale-runner.yaml` pins a different `server_version`, it is updated to the version from the flag
 once that version is installed (the same applies to `download --server-version`).
+
+`--accept-early-plugins`, `--allow-op` and `--backup` also take an explicit value: `--allow-op=true`
+or `--allow-op=false`. An explicit value overrides the config file.
+
+An empty argument and an option with an empty value (`--server-version=`) are ignored, as if they were not
+passed. This lets panels like GameAP put every option into the start command and leave unset ones empty:
+
+```bash
+hytale-runner run --patchline=release --server-version= --allow-op=false --backup=true --jvm-args=
+```
 
 ### Download Command
 
