@@ -145,16 +145,10 @@ fn parse_java_version_output(output: &str, path: PathBuf) -> Option<JavaInfo> {
     let first_line = lines[0];
 
     // Extract version string between quotes
-    let version = if let Some(start) = first_line.find('"') {
-        let rest = &first_line[start + 1..];
-        if let Some(end) = rest.find('"') {
-            rest[..end].to_string()
-        } else {
-            return None;
-        }
-    } else {
-        return None;
-    };
+    let start = first_line.find('"')?;
+    let rest = &first_line[start + 1..];
+    let end = rest.find('"')?;
+    let version = rest[..end].to_string();
 
     // Try to extract vendor from second line
     let vendor = lines.get(1).and_then(|line| {
