@@ -212,14 +212,15 @@ async fn run_server_loop(
         };
 
         // Determine accept_early_plugins (CLI overrides config)
-        let accept_early_plugins =
-            args.accept_early_plugins || config.defaults.accept_early_plugins;
+        let accept_early_plugins = args
+            .accept_early_plugins
+            .unwrap_or(config.defaults.accept_early_plugins);
 
         // Determine allow_op (CLI overrides config)
-        let allow_op = args.allow_op || config.defaults.allow_op;
+        let allow_op = args.allow_op.unwrap_or(config.defaults.allow_op);
 
-        // Determine backup settings
-        let backup_enabled = args.backup || config.defaults.backup.enabled;
+        // Determine backup settings (CLI overrides config)
+        let backup_enabled = args.backup.unwrap_or(config.defaults.backup.enabled);
         let backup_dir: Option<PathBuf> =
             args.backup_dir
                 .clone()

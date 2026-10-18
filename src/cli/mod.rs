@@ -4,9 +4,23 @@ pub mod run;
 pub mod update;
 pub mod version;
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+
+/// Drop empty arguments and options with an empty value (`--server-version=`), so they
+/// mean "not set". Panels like GameAP substitute unset variables into the command as empty strings.
+pub fn skip_empty_args(args: impl IntoIterator<Item = OsString>) -> Vec<OsString> {
+    args.into_iter()
+        .filter(|arg| {
+            let arg = arg.to_string_lossy();
+            let empty_option =
+                matches!(arg.split_once('='), Some((name, "")) if name.starts_with("--"));
+            !arg.is_empty() && !empty_option
+        })
+        .collect()
+}
 
 /// Hytale Runner - Cross-platform CLI for running Hytale dedicated servers
 #[derive(Parser, Debug)]
@@ -107,16 +121,16 @@ pub struct RunArgs {
     pub no_restart: bool,
 
     /// Acknowledge that loading early plugins is unsupported
-    #[arg(long)]
-    pub accept_early_plugins: bool,
+    #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    pub accept_early_plugins: Option<bool>,
 
     /// Allow op commands
-    #[arg(long)]
-    pub allow_op: bool,
+    #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    pub allow_op: Option<bool>,
 
     /// Enable automatic backups
-    #[arg(long)]
-    pub backup: bool,
+    #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    pub backup: Option<bool>,
 
     /// Backup directory
     #[arg(long)]
@@ -178,4 +192,77 @@ pub enum UpdateCommands {
 
     /// Show current version and update status
     Status,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_run(args: &[&str]) -> RunArgs {
+        let args = ["run"].iter().chain(args).map(OsString::from);
+        RunArgs::try_parse_from(skip_empty_args(args)).unwrap()
+    }
+
+    #[test]
+    fn test_skip_empty_args() {
+        let args = [
+            "hytale-runner",
+            "run",
+            "",
+            "--server-version=",
+            "--patchline=release",
+            "--jvm-args=-Dfoo=",
+            "-Dbar=",
+        ]
+        .map(OsString::from);
+
+        assert_eq!(
+            skip_empty_args(args),
+            [
+                "hytale-runner",
+                "run",
+                "--patchline=release",
+                "--jvm-args=-Dfoo=",
+                "-Dbar="
+            ]
+            .map(OsString::from)
+        );
+    }
+
+    #[test]
+    fn test_run_empty_values_are_not_set() {
+        let args = parse_run(&[
+            "--patchline=",
+            "--server-version=",
+            "--backup-dir=",
+            "--backup-frequency=",
+            "--jvm-args=",
+            "",
+        ]);
+
+        assert_eq!(args.patchline, None);
+        assert_eq!(args.server_version, None);
+        assert_eq!(args.backup_dir, None);
+        assert_eq!(args.backup_frequency, None);
+        assert_eq!(args.jvm_args, None);
+    }
+
+    #[test]
+    fn test_run_bool_flags() {
+        let args = parse_run(&[
+            "--allow-op",
+            "--accept-early-plugins=true",
+            "--backup=false",
+        ]);
+
+        assert_eq!(args.allow_op, Some(true));
+        assert_eq!(args.accept_early_plugins, Some(true));
+        assert_eq!(args.backup, Some(false));
+
+        let args = parse_run(&[]);
+
+        assert_eq!(args.allow_op, None);
+        assert_eq!(args.accept_early_plugins, None);
+        assert_eq!(args.backup, None);
+    }
 }

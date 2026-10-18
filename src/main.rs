@@ -13,7 +13,7 @@ use cli::{Cli, Commands};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let cli = Cli::parse_from(cli::skip_empty_args(std::env::args_os()));
 
     // Initialize logging
     let filter = if cli.verbose {
