@@ -30,6 +30,7 @@ pub struct Cli {
 }
 
 #[derive(Subcommand, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Commands {
     /// Download (if needed) and run the Hytale server
     Run(RunArgs),
@@ -89,6 +90,14 @@ pub struct RunArgs {
     #[arg(long)]
     pub aot_path: Option<PathBuf>,
 
+    /// Patchline to download from: release, pre-release (default: release)
+    #[arg(long)]
+    pub patchline: Option<String>,
+
+    /// Pin the server to a specific version (staged updates are not applied)
+    #[arg(long)]
+    pub server_version: Option<String>,
+
     /// Additional JVM arguments
     #[arg(long)]
     pub jvm_args: Option<String>,
@@ -121,8 +130,12 @@ pub struct RunArgs {
 #[derive(Parser, Debug)]
 pub struct DownloadArgs {
     /// Patchline: release (default), pre-release
-    #[arg(long, default_value = "release")]
-    pub patchline: String,
+    #[arg(long)]
+    pub patchline: Option<String>,
+
+    /// Download only this server version
+    #[arg(long)]
+    pub server_version: Option<String>,
 
     /// Re-download even if files exist
     #[arg(long)]

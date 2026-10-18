@@ -77,7 +77,19 @@ hytale-runner run --java-path /path/to/java
 
 # Run without auto-restart on updates
 hytale-runner run --no-restart
+
+# Download from the pre-release patchline if server files are missing
+hytale-runner run --patchline pre-release
+
+# Pin the server to a specific version
+hytale-runner run --server-version 0.7.2
 ```
+
+`--server-version` keeps the server on the given version: if it is not installed, the runner downloads it,
+and staged updates are not applied. `hytale-downloader` can only download the latest version of a patchline,
+so a version that is no longer the latest can only be used if it is already installed.
+If `.hytale-runner.yaml` pins a different `server_version`, it is updated to the version from the flag
+once that version is installed (the same applies to `download --server-version`).
 
 ### Download Command
 
@@ -90,6 +102,9 @@ hytale-runner download --force
 
 # Download pre-release version
 hytale-runner download --patchline pre-release
+
+# Download only if the latest version matches
+hytale-runner download --server-version 0.7.2
 ```
 
 ### Install Command
@@ -154,6 +169,7 @@ port: 5520
 memory_max: "8G"
 assets: Assets.zip
 patchline: release
+# server_version: 0.7.2
 
 java:
   path: ""
@@ -183,6 +199,10 @@ The Hytale server uses exit code 8 to signal that an update is ready. When this 
 4. It restarts the server automatically
 
 Use `--no-restart` to disable this behavior and exit instead.
+
+When the server version is pinned (`--server-version` or `server_version` in config), staged updates are skipped
+and left in `updater/staging/`. Downloading server files removes `updater/staging/`, since a staged update
+is older than the downloaded version.
 
 ## Building for Multiple Platforms
 
