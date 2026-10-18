@@ -131,7 +131,22 @@ async fn ensure_server_files(
     }
 
     if installed {
-        info!("Server files found");
+        match patchline {
+            Some(patchline) if config.update.enabled => {
+                info!(
+                    "Server files found, checking for updates (patchline: {})",
+                    patchline
+                );
+                // The installed server still starts if the check or the download fails
+                if let Err(e) = update_server_files(server_dir, config, patchline).await {
+                    warn!(
+                        "Failed to update server files, starting the installed version: {:#}",
+                        e
+                    );
+                }
+            }
+            _ => info!("Server files found"),
+        }
         return Ok(());
     }
 
@@ -140,6 +155,13 @@ async fn ensure_server_files(
     downloader.download_all(server_dir, false, None).await?;
 
     Ok(())
+}
+
+/// Download the latest version of the patchline if it differs from the installed one
+async fn update_server_files(server_dir: &Path, config: &AppConfig, patchline: &str) -> Result<()> {
+    ServerDownloader::new(config, Some(patchline))?
+        .download_all(server_dir, false, None)
+        .await
 }
 
 /// Run the server with auto-update loop
@@ -264,5 +286,155 @@ async fn run_server_loop(
         }
 
         return Ok(());
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::fs;
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+
+    use tempfile::TempDir;
+
+    use super::*;
+
+    /// Fake hytale-downloader: the latest version of a patchline is read from
+    /// `version-<patchline>`, a download copies `server.zip`
+    const FAKE_DOWNLOADER: &str = r#"#!/bin/sh
+dir=$(dirname "$0")
+patchline=release
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -patchline) patchline=$2; shift 2 ;;
+        -print-version) cat "$dir/version-$patchline"; exit ;;
+        -download-path) cp "$dir/server.zip" "$2"; exit ;;
+        *) shift ;;
+    esac
+done
+"#;
+
+    struct Fixture {
+        tools: TempDir,
+        server: TempDir,
+        config: AppConfig,
+    }
+
+    impl Fixture {
+        fn new(installed_version: &str) -> Self {
+            let tools = TempDir::new().unwrap();
+            let downloader = tools.path().join("hytale-downloader");
+            fs::write(&downloader, FAKE_DOWNLOADER).unwrap();
+            fs::set_permissions(&downloader, fs::Permissions::from_mode(0o755)).unwrap();
+
+            let server_zip = fs::File::create(tools.path().join("server.zip")).unwrap();
+            let mut zip = zip::ZipWriter::new(server_zip);
+            for (name, content) in [
+                ("Server/HytaleServer.jar", "new jar"),
+                ("Assets.zip", "new assets"),
+            ] {
+                zip.start_file(name, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                zip.write_all(content.as_bytes()).unwrap();
+            }
+            zip.finish().unwrap();
+
+            let server = TempDir::new().unwrap();
+            fs::create_dir_all(server.path().join("Server")).unwrap();
+            fs::write(server.path().join("Server/HytaleServer.jar"), "old jar").unwrap();
+            fs::write(server.path().join("Assets.zip"), "old assets").unwrap();
+            fs::write(server.path().join("version.txt"), installed_version).unwrap();
+
+            let config = AppConfig {
+                downloader_path: Some(downloader.to_string_lossy().into_owned()),
+                ..AppConfig::default()
+            };
+
+            Self {
+                tools,
+                server,
+                config,
+            }
+        }
+
+        fn set_latest_version(&self, patchline: &str, version: &str) {
+            let path = self.tools.path().join(format!("version-{}", patchline));
+            fs::write(path, version).unwrap();
+        }
+
+        async fn ensure_server_files(&self, patchline: Option<&str>) -> Result<()> {
+            let server_dir = self.server.path();
+            let jar_path = server_dir.join("Server/HytaleServer.jar");
+            ensure_server_files(server_dir, &jar_path, &self.config, patchline, None).await
+        }
+
+        fn installed_jar(&self) -> String {
+            fs::read_to_string(self.server.path().join("Server/HytaleServer.jar")).unwrap()
+        }
+
+        fn installed_version(&self) -> Option<String> {
+            ServerDownloader::get_local_version(self.server.path())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_patchline_update_is_installed_on_start() {
+        let fixture = Fixture::new("1.0");
+        fixture.set_latest_version("pre-release", "2.0");
+
+        fixture
+            .ensure_server_files(Some("pre-release"))
+            .await
+            .unwrap();
+
+        assert_eq!(fixture.installed_jar(), "new jar");
+        assert_eq!(fixture.installed_version().as_deref(), Some("2.0"));
+    }
+
+    #[tokio::test]
+    async fn test_patchline_up_to_date_is_not_downloaded() {
+        let fixture = Fixture::new("1.0");
+        fixture.set_latest_version("pre-release", "1.0");
+
+        fixture
+            .ensure_server_files(Some("pre-release"))
+            .await
+            .unwrap();
+
+        assert_eq!(fixture.installed_jar(), "old jar");
+    }
+
+    #[tokio::test]
+    async fn test_failed_update_check_starts_installed_version() {
+        let fixture = Fixture::new("1.0");
+
+        fixture
+            .ensure_server_files(Some("pre-release"))
+            .await
+            .unwrap();
+
+        assert_eq!(fixture.installed_jar(), "old jar");
+        assert_eq!(fixture.installed_version().as_deref(), Some("1.0"));
+    }
+
+    #[tokio::test]
+    async fn test_no_update_check_without_patchline() {
+        let fixture = Fixture::new("1.0");
+        fixture.set_latest_version("release", "2.0");
+
+        fixture.ensure_server_files(None).await.unwrap();
+
+        assert_eq!(fixture.installed_jar(), "old jar");
+    }
+
+    #[tokio::test]
+    async fn test_no_update_check_when_updates_disabled() {
+        let mut fixture = Fixture::new("1.0");
+        fixture.config.update.enabled = false;
+        fixture.set_latest_version("release", "2.0");
+
+        fixture.ensure_server_files(Some("release")).await.unwrap();
+
+        assert_eq!(fixture.installed_jar(), "old jar");
     }
 }

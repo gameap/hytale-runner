@@ -78,7 +78,7 @@ hytale-runner run --java-path /path/to/java
 # Run without auto-restart on updates
 hytale-runner run --no-restart
 
-# Download from the pre-release patchline if server files are missing
+# Run the latest version of the pre-release patchline
 hytale-runner run --patchline pre-release
 
 # Pin the server to a specific version
@@ -87,6 +87,12 @@ hytale-runner run --server-version 0.7.2
 # Allow op commands and enable backups every 30 minutes
 hytale-runner run --allow-op --backup --backup-dir backups --backup-frequency 30
 ```
+
+With `--patchline` (or `patchline` in config), every start compares the installed version (`version.txt`)
+with the latest version of the patchline and downloads the latest one if they differ, so switching the patchline
+also switches the installed server. If the check or the download fails, the installed version is started.
+The check is skipped when the version is pinned with `--server-version` or when `update.enabled` is `false`.
+Without a patchline, server files are only downloaded if they are missing.
 
 `--server-version` keeps the server on the given version: if it is not installed, the runner downloads it,
 and staged updates are not applied. `hytale-downloader` can only download the latest version of a patchline,
@@ -188,7 +194,7 @@ java:
   path: ""
 
 update:
-  enabled: true
+  enabled: true # check for patchline updates on start
   auto_apply: false
 ```
 
