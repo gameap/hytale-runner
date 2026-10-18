@@ -29,7 +29,7 @@ pub struct ServerUpdater {
 
 impl ServerUpdater {
     pub fn new(server_dir: PathBuf, config: &AppConfig) -> Self {
-        let downloader = ServerDownloader::new(config).ok();
+        let downloader = ServerDownloader::new(config, config.patchline.as_deref()).ok();
         Self {
             server_dir,
             downloader,

@@ -38,11 +38,32 @@ pub async fn execute(args: &RunArgs, cli: &Cli) -> Result<()> {
     let java_path = ensure_java(args, &config).await?;
     info!("Using Java: {}", java_path.display());
 
+    let patchline = args.patchline.as_deref().or(config.patchline.as_deref());
+    let server_version = args
+        .server_version
+        .as_deref()
+        .or(config.server_version.as_deref());
+
     // Ensure server files are available
-    ensure_server_files(&server_dir, &jar_path, &config).await?;
+    ensure_server_files(&server_dir, &jar_path, &config, patchline, server_version).await?;
+
+    if let Some(ref version) = args.server_version {
+        if let Err(e) = AppConfig::update_server_version(&server_dir, version) {
+            warn!("Failed to update server_version in config: {:#}", e);
+        }
+    }
 
     // Run the server with auto-update loop
-    run_server_loop(args, &config, &server_dir, &java_path, &jar_path, &aot_path).await
+    run_server_loop(
+        args,
+        &config,
+        &server_dir,
+        &java_path,
+        &jar_path,
+        &aot_path,
+        server_version,
+    )
+    .await
 }
 
 /// Ensure Java is available, installing if necessary
@@ -82,17 +103,41 @@ async fn ensure_java(args: &RunArgs, config: &AppConfig) -> Result<PathBuf> {
 }
 
 /// Ensure server files are available, downloading if necessary
-async fn ensure_server_files(server_dir: &Path, jar_path: &Path, config: &AppConfig) -> Result<()> {
+async fn ensure_server_files(
+    server_dir: &Path,
+    jar_path: &Path,
+    config: &AppConfig,
+    patchline: Option<&str>,
+    server_version: Option<&str>,
+) -> Result<()> {
     let assets_path = server_dir.join("Assets.zip");
+    let installed = jar_path.exists() && assets_path.exists();
 
-    if jar_path.exists() && assets_path.exists() {
+    if let Some(version) = server_version {
+        if installed && ServerDownloader::get_local_version(server_dir).as_deref() == Some(version)
+        {
+            info!("Server files found (version {})", version);
+            return Ok(());
+        }
+
+        info!(
+            "Server version {} is not installed, downloading...",
+            version
+        );
+        let downloader = ServerDownloader::new(config, patchline)?;
+        return downloader
+            .download_all(server_dir, true, Some(version))
+            .await;
+    }
+
+    if installed {
         info!("Server files found");
         return Ok(());
     }
 
     info!("Server files not found, downloading...");
-    let downloader = ServerDownloader::new(config)?;
-    downloader.download_all(server_dir, false).await?;
+    let downloader = ServerDownloader::new(config, patchline)?;
+    downloader.download_all(server_dir, false, None).await?;
 
     Ok(())
 }
@@ -106,6 +151,7 @@ async fn run_server_loop(
     java_path: &Path,
     jar_path: &Path,
     aot_path: &Path,
+    server_version: Option<&str>,
 ) -> Result<()> {
     let updater = ServerUpdater::new(server_dir.to_path_buf(), config);
     let runner = ServerRunner::new(
@@ -119,11 +165,18 @@ async fn run_server_loop(
     loop {
         // Apply staged update if present
         if updater.has_staged_update() {
-            info!("Applying staged update...");
-            updater
-                .apply_staged_update()
-                .context("Failed to apply staged update")?;
-            info!("Update applied successfully");
+            if let Some(version) = server_version {
+                warn!(
+                    "Skipping staged update: server version is pinned to {}",
+                    version
+                );
+            } else {
+                info!("Applying staged update...");
+                updater
+                    .apply_staged_update()
+                    .context("Failed to apply staged update")?;
+                info!("Update applied successfully");
+            }
         }
 
         // Build JVM arguments

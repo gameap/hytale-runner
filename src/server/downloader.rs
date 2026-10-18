@@ -12,21 +12,46 @@ const HYTALE_DOWNLOADER_BIN: &str = "hytale-downloader";
 /// Downloads Hytale server files using hytale-downloader
 pub struct ServerDownloader {
     downloader_path: PathBuf,
+    patchline: Option<String>,
 }
 
 impl ServerDownloader {
-    pub fn new(config: &AppConfig) -> Result<Self> {
+    pub fn new(config: &AppConfig, patchline: Option<&str>) -> Result<Self> {
         let downloader_path = find_hytale_downloader(config)?;
 
-        Ok(Self { downloader_path })
+        Ok(Self {
+            downloader_path,
+            patchline: patchline.map(str::to_string),
+        })
     }
 
-    /// Download all server files using hytale-downloader
-    pub async fn download_all(&self, server_dir: &Path, force: bool) -> Result<()> {
+    /// Download all server files using hytale-downloader.
+    /// With `required_version`, only that version is accepted: hytale-downloader
+    /// can only fetch the latest version of a patchline, so any other version is an error.
+    pub async fn download_all(
+        &self,
+        server_dir: &Path,
+        force: bool,
+        required_version: Option<&str>,
+    ) -> Result<()> {
         std::fs::create_dir_all(server_dir).context("Failed to create server directory")?;
 
-        // Check if download is needed
-        if !force {
+        if let Some(required_version) = required_version {
+            if !force && Self::get_local_version(server_dir).as_deref() == Some(required_version) {
+                info!("Server version {} is already installed", required_version);
+                return Ok(());
+            }
+
+            let remote_version = self.get_remote_version().await?;
+            if remote_version != required_version {
+                anyhow::bail!(
+                    "Server version {} is not available for download (latest available: {}). \
+                     hytale-downloader can only download the latest version of a patchline",
+                    required_version,
+                    remote_version
+                );
+            }
+        } else if !force {
             if let Some(local_version) = Self::get_local_version(server_dir) {
                 // Only check remote version if we have a local version to compare
                 let remote_version = self.get_remote_version().await?;
@@ -44,7 +69,7 @@ impl ServerDownloader {
         // Download to temp zip file
         let zip_path = server_dir.join("server-download.zip");
 
-        let mut cmd = Command::new(&self.downloader_path);
+        let mut cmd = self.command();
         cmd.arg("-download-path")
             .arg(&zip_path)
             .stdin(Stdio::inherit())
@@ -70,6 +95,13 @@ impl ServerDownloader {
         // Get version and save it
         let version = self.get_remote_version().await?;
         Self::save_version(server_dir, &version)?;
+
+        // A staged update is older than freshly downloaded files and would downgrade the server
+        let staging_dir = server_dir.join("updater").join("staging");
+        if staging_dir.exists() {
+            info!("Removing outdated staged update: {}", staging_dir.display());
+            std::fs::remove_dir_all(&staging_dir).context("Failed to remove staging directory")?;
+        }
 
         // Clean up zip file
         std::fs::remove_file(&zip_path).ok();
@@ -100,7 +132,8 @@ impl ServerDownloader {
 
     /// Get the remote version from hytale-downloader
     async fn get_remote_version(&self) -> Result<String> {
-        let output = Command::new(&self.downloader_path)
+        let output = self
+            .command()
             .arg("-print-version")
             .output()
             .await
@@ -115,8 +148,17 @@ impl ServerDownloader {
         Ok(version)
     }
 
+    /// Build a hytale-downloader command with the selected patchline
+    fn command(&self) -> Command {
+        let mut cmd = Command::new(&self.downloader_path);
+        if let Some(ref patchline) = self.patchline {
+            cmd.arg("-patchline").arg(patchline);
+        }
+        cmd
+    }
+
     /// Get the local installed version from version.txt
-    fn get_local_version(server_dir: &Path) -> Option<String> {
+    pub fn get_local_version(server_dir: &Path) -> Option<String> {
         let version_file = server_dir.join("version.txt");
         std::fs::read_to_string(version_file)
             .ok()

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use tracing::{debug, info};
 
 /// Global configuration file name
 const GLOBAL_CONFIG_FILE: &str = "config.yaml";
@@ -22,6 +22,10 @@ pub struct AppConfig {
     pub update: UpdateConfig,
     /// Path to hytale-downloader binary
     pub downloader_path: Option<String>,
+    /// Patchline to download from (release, pre-release)
+    pub patchline: Option<String>,
+    /// Pinned server version
+    pub server_version: Option<String>,
 }
 
 /// Default server settings
@@ -148,6 +152,53 @@ impl AppConfig {
 
         Ok(config)
     }
+
+    /// Replace `server_version` in the per-server config if it is set there to a different version.
+    /// The file is edited line by line to keep comments and formatting.
+    pub fn update_server_version(server_dir: &Path, version: &str) -> Result<()> {
+        let path = server_dir.join(SERVER_CONFIG_FILE);
+        if !path.exists() {
+            return Ok(());
+        }
+
+        let current = match load_config_file(&path)?.server_version {
+            Some(current) if current != version => current,
+            _ => return Ok(()),
+        };
+
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read config file: {}", path.display()))?;
+
+        let updated: String = content
+            .split_inclusive('\n')
+            .map(|line| {
+                if line.starts_with("server_version:") {
+                    let eol = &line[line.trim_end_matches(['\r', '\n']).len()..];
+                    format!("server_version: \"{}\"{}", version, eol)
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect();
+
+        if updated == content {
+            anyhow::bail!(
+                "Failed to find top-level 'server_version' in {}",
+                path.display()
+            );
+        }
+
+        std::fs::write(&path, updated)
+            .with_context(|| format!("Failed to write config file: {}", path.display()))?;
+
+        info!(
+            "Updated server_version in {}: {} -> {}",
+            path.display(),
+            current,
+            version
+        );
+        Ok(())
+    }
 }
 
 /// Get the global configuration directory
@@ -236,5 +287,74 @@ fn merge_configs(base: AppConfig, overlay: AppConfig) -> AppConfig {
         },
         update: overlay.update,
         downloader_path: overlay.downloader_path.or(base.downloader_path),
+        patchline: overlay.patchline.or(base.patchline),
+        server_version: overlay.server_version.or(base.server_version),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn write_server_config(dir: &TempDir, content: &str) -> PathBuf {
+        let path = dir.path().join(SERVER_CONFIG_FILE);
+        std::fs::write(&path, content).unwrap();
+        path
+    }
+
+    #[test]
+    fn test_update_server_version_replaces_value() {
+        let dir = TempDir::new().unwrap();
+        let path = write_server_config(
+            &dir,
+            "# pinned\r\npatchline: release\r\nserver_version: 0.7.2\r\ndownloader_path: /bin/dl\r\n",
+        );
+
+        AppConfig::update_server_version(dir.path(), "0.7.3").unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "# pinned\r\npatchline: release\r\nserver_version: \"0.7.3\"\r\ndownloader_path: /bin/dl\r\n"
+        );
+        assert_eq!(
+            load_config_file(&path).unwrap().server_version.as_deref(),
+            Some("0.7.3")
+        );
+    }
+
+    #[test]
+    fn test_update_server_version_same_version() {
+        let dir = TempDir::new().unwrap();
+        let path = write_server_config(&dir, "server_version: 0.7.3 # keep\n");
+
+        AppConfig::update_server_version(dir.path(), "0.7.3").unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "server_version: 0.7.3 # keep\n"
+        );
+    }
+
+    #[test]
+    fn test_update_server_version_not_pinned() {
+        let dir = TempDir::new().unwrap();
+        let path = write_server_config(&dir, "patchline: release\n# server_version: 0.7.2\n");
+
+        AppConfig::update_server_version(dir.path(), "0.7.3").unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "patchline: release\n# server_version: 0.7.2\n"
+        );
+    }
+
+    #[test]
+    fn test_update_server_version_no_config() {
+        let dir = TempDir::new().unwrap();
+
+        AppConfig::update_server_version(dir.path(), "0.7.3").unwrap();
+
+        assert!(!dir.path().join(SERVER_CONFIG_FILE).exists());
     }
 }
