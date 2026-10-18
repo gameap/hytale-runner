@@ -25,8 +25,13 @@ pub fn skip_empty_args(args: impl IntoIterator<Item = OsString>) -> Vec<OsString
 /// Hytale Runner - Cross-platform CLI for running Hytale dedicated servers
 #[derive(Parser, Debug)]
 #[command(name = "hytale-runner")]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None, disable_version_flag = true)]
 pub struct Cli {
+    // Long-only: `-V` is taken by --verbose
+    /// Print version
+    #[arg(long, action = clap::ArgAction::Version)]
+    version: (),
+
     /// Server directory (default: current directory)
     #[arg(short = 'd', long, global = true)]
     pub dir: Option<PathBuf>,
@@ -196,7 +201,24 @@ pub enum UpdateCommands {
 
 #[cfg(test)]
 mod tests {
+    use clap::CommandFactory;
+    use clap::error::ErrorKind;
+
     use super::*;
+
+    #[test]
+    fn test_cli_definition() {
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn test_short_v_is_verbose() {
+        let cli = Cli::try_parse_from(["hytale-runner", "-V", "version"]).unwrap();
+        assert!(cli.verbose);
+
+        let err = Cli::try_parse_from(["hytale-runner", "--version"]).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::DisplayVersion);
+    }
 
     fn parse_run(args: &[&str]) -> RunArgs {
         let args = ["run"].iter().chain(args).map(OsString::from);
