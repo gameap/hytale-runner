@@ -44,6 +44,10 @@ pub struct Cli {
     #[arg(short = 'V', long, global = true)]
     pub verbose: bool,
 
+    /// Remove colors from the runner and server output (same as setting NO_COLOR)
+    #[arg(long, global = true)]
+    pub no_color: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

@@ -35,6 +35,9 @@ anyhow = "1"
 # Async utilities
 futures-util = "0.3"
 
+# ANSI escape sequence stripping
+anstream = { version = "1", default-features = false }
+
 # Cryptography
 sha2 = "0.10"
 hex = "0.4"

@@ -11,8 +11,8 @@ use crate::server::downloader::ServerDownloader;
 use crate::server::runner::ServerRunner;
 use crate::server::updater::ServerUpdater;
 
-/// Execute the run command
-pub async fn execute(args: &RunArgs, cli: &Cli) -> Result<()> {
+/// Execute the run command. Without `color`, ANSI escape sequences are removed from the server output.
+pub async fn execute(args: &RunArgs, cli: &Cli, color: bool) -> Result<()> {
     let server_dir = cli
         .dir
         .clone()
@@ -62,6 +62,7 @@ pub async fn execute(args: &RunArgs, cli: &Cli) -> Result<()> {
         &jar_path,
         &aot_path,
         server_version,
+        color,
     )
     .await
 }
@@ -174,6 +175,7 @@ async fn run_server_loop(
     jar_path: &Path,
     aot_path: &Path,
     server_version: Option<&str>,
+    color: bool,
 ) -> Result<()> {
     let updater = ServerUpdater::new(server_dir.to_path_buf(), config);
     let runner = ServerRunner::new(
@@ -182,6 +184,7 @@ async fn run_server_loop(
         java_path.to_path_buf(),
         jar_path.to_path_buf(),
         aot_path.to_path_buf(),
+        color,
     );
 
     loop {

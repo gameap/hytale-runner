@@ -22,20 +22,22 @@ async fn main() -> Result<()> {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
     };
 
-    let is_tty = std::io::IsTerminal::is_terminal(&std::io::stderr());
-    if !is_tty {
+    let color = !cli.no_color
+        && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty())
+        && std::io::IsTerminal::is_terminal(&std::io::stderr());
+    if !color {
         // SAFETY: Called early in main before any threads are spawned
         unsafe { std::env::set_var("NO_COLOR", "1") };
     }
 
     tracing_subscriber::registry()
-        .with(fmt::layer().with_target(false).with_ansi(is_tty))
+        .with(fmt::layer().with_target(false).with_ansi(color))
         .with(filter)
         .init();
 
     // Execute the appropriate command
     match &cli.command {
-        Commands::Run(args) => cli::run::execute(args, &cli).await,
+        Commands::Run(args) => cli::run::execute(args, &cli, color).await,
         Commands::Download(args) => cli::download::execute(args, &cli).await,
         Commands::Install(args) => cli::install::execute(args, &cli).await,
         Commands::Update(args) => cli::update::execute(args, &cli).await,

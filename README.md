@@ -60,8 +60,19 @@ Options:
   -d, --dir <PATH>     Server directory (default: current)
   -c, --config <PATH>  Config file path
   -V, --verbose        Enable verbose output
+      --no-color       Remove colors from the runner and server output
   -h, --help           Print help
 ```
+
+### Colors
+
+The Hytale server colors its log with ANSI escape sequences. In a log file or a panel console that does not
+render them, they show up as `[33m`, `[m` and the like. The runner removes them from the server output when
+output is not a terminal, when `--no-color` is passed or when the `NO_COLOR` environment variable is set.
+In that case the server output goes through the runner instead of straight to the terminal.
+
+A terminal that is captured to a file (e.g. `tmux pipe-pane`, used by GameAP) still looks like a terminal
+to the runner, so pass `--no-color` there.
 
 ### Run Command
 
