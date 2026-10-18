@@ -25,12 +25,6 @@ jobs:
             asset_name: hytale-runner-linux-x86_64
 
           - os: ubuntu-latest
-            target: i686-unknown-linux-gnu
-            cross: true
-            artifact_name: hytale-runner
-            asset_name: hytale-runner-linux-i686
-
-          - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             cross: true
             artifact_name: hytale-runner
@@ -138,14 +132,55 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Download hytale-downloader
+        env:
+          HYTALE_DOWNLOADER_URL: https://downloader.hytale.com/hytale-downloader.zip
+        run: |
+          downloader="${RUNNER_TEMP}/hytale-downloader"
+          curl -fsSL -o "${RUNNER_TEMP}/hytale-downloader.zip" "${HYTALE_DOWNLOADER_URL}"
+          unzip -o "${RUNNER_TEMP}/hytale-downloader.zip" \
+            hytale-downloader-linux-amd64 hytale-downloader-windows-amd64.exe \
+            -d "${downloader}"
+          chmod +x "${downloader}/hytale-downloader-linux-amd64"
+          "${downloader}/hytale-downloader-linux-amd64" -version
+
+      # hytale-runner looks for hytale-downloader next to its own executable,
+      # so the bundles keep both binaries side by side under these names.
+      - name: Build bundles
+        run: |
+          downloader="${RUNNER_TEMP}/hytale-downloader"
+
+          linux="${RUNNER_TEMP}/bundle-linux"
+          mkdir -p "${linux}"
+          cp dist/hytale-runner-linux-x86_64 "${linux}/hytale-runner"
+          cp "${downloader}/hytale-downloader-linux-amd64" "${linux}/hytale-downloader"
+          chmod +x "${linux}/hytale-runner" "${linux}/hytale-downloader"
+          tar -czf dist/hytale-linux-amd64.tar.gz -C "${linux}" hytale-runner hytale-downloader
+
+          windows="${RUNNER_TEMP}/bundle-windows"
+          mkdir -p "${windows}"
+          cp dist/hytale-runner-windows-x86_64.exe "${windows}/hytale-runner.exe"
+          cp "${downloader}/hytale-downloader-windows-amd64.exe" "${windows}/hytale-downloader.exe"
+          (cd "${windows}" && zip -q "${GITHUB_WORKSPACE}/dist/hytale-windows-amd64.zip" hytale-runner.exe hytale-downloader.exe)
+
+          cd dist
+          for bundle in hytale-linux-amd64.tar.gz hytale-windows-amd64.zip; do
+            sha256sum "${bundle}" > "${bundle}.sha256"
+          done
+
       - name: Combine checksums
         run: |
           cat dist/*.sha256 > dist/checksums.txt
 
-      - name: Upload checksums
+      - name: Upload bundles and checksums
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/checksums.txt
+          files: |
+            dist/hytale-linux-amd64.tar.gz
+            dist/hytale-linux-amd64.tar.gz.sha256
+            dist/hytale-windows-amd64.zip
+            dist/hytale-windows-amd64.zip.sha256
+            dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
